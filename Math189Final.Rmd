@@ -1,0 +1,535 @@
+---
+title: "Math 189 final"
+output: pdf_document
+---
+
+
+```{r}
+cells = read.csv('/Users/Jonnie/Desktop/CERN/train_100_events/event000001000-cells.csv')
+hits = read.csv('/Users/Jonnie/Desktop/CERN/train_100_events/event000001000-hits.csv')
+particles = read.csv('/Users/Jonnie/Desktop/CERN/train_100_events/event000001000-particles.csv')
+truth = read.csv('/Users/Jonnie/Desktop/CERN/train_100_events/event000001000-truth.csv')
+```
+
+
+### Change types
+```{r}
+for (i in 1:length(cells)){
+  print(paste('cells:',names(cells)[i],':',class(cells[,i])))
+}
+for (i in 1:length(hits)){
+  print(paste('hits:', names(hits)[i],':',class(hits[,i])))
+}
+for (i in 1:length(particles)){
+  print(paste('particles:', names(particles)[i],':',class(particles[,i])))
+}
+for (i in 1:length(truth)){
+  print(paste('truth:', names(truth)[i],':',class(truth[,i])))
+}
+```
+
+```{r}
+cells$hit_id = factor(cells$hit_id)
+cells$ch0 = as.numeric(cells$ch0)
+cells$ch1 = as.numeric(cells$ch1)
+hits$hit_id = factor(hits$hit_id)
+hits$volume_id = factor(hits$volume_id)
+hits$layer_id = factor(hits$layer_id)
+hits$module_id = factor(hits$module_id)
+particles$particle_id = factor(particles$particle_id)
+truth$particle_id = factor(truth$particle_id)
+
+
+```
+
+### Particles + truth
+
+```{r}
+particles_truth <- merge(particles,truth,by="particle_id")
+```
+
+
+
+
+
+
+```{r}
+particles_truth$net_x = abs(particles_truth$vx - particles_truth$tx)
+particles_truth$net_y = abs(particles_truth$vy - particles_truth$ty)
+particles_truth$net_z = abs(particles_truth$vz - particles_truth$tz)
+particles_truth$two_norm = sqrt(particles_truth$net_x^2 + particles_truth$net_y^2 + particles_truth$net_z^2)
+```
+
+### orginal and last position
+
+### net displacement
+```{r}
+df = particles_truth[1,]
+df = df[-1,]
+i = 1
+while (i < nrow(particles_truth)){
+  key = particles_truth$particle_id[i]
+  test = particles_truth[particles_truth$particle_id == key,]
+  df = rbind(df,test[nrow(test),])
+  i = i + nrow(test)
+  if(nrow(df) > 500){
+    break
+  }
+}
+```
+
+```{r}
+df$q = factor(df$q)
+class(df$q)
+```
+
+
+```{r}
+library(ggplot2)
+library(latex2exp)
+df_plot = qplot(df$two_norm,bins =15 )
+df_plot+ labs(title = "Distribution of Total displacement") + theme(plot.title = element_text(hjust = 0.5)) +xlab(TeX("$||$last position - origin positon$||_2$")) 
+```
+
+
+
+
+Split positive and negative charge data
+```{r}
+pos_charge = df[df$q == 1,]
+neg_charge = df[df$q ==-1,]
+```
+
+
+```{r}
+ggplot() + geom_histogram(data = pos_charge, aes(x = two_norm,color = 'blue'),bins = 15) + geom_histogram(data = neg_charge, aes(x = two_norm,color = 'red'),bins = 15) + labs(title = "Distribution of Total displacement: Positive vs Negatively charged") + theme(plot.title = element_text(hjust = 0.5)) +xlab(TeX("$||$last position - origin positon$||_2$"))
+```
+
+
+Run test 
+```{r}
+mean(neg_charge$two_norm)
+mean(pos_charge$two_norm)
+wilcox.test(neg_charge$two_norm, pos_charge$two_norm)
+```
+
+Indeed distributions are similar when normalized 
+```{r}
+ggplot() + geom_histogram(data = pos_charge, aes(x = two_norm,y=..count../sum(..count..),color = 'blue'),bins = 15) + geom_histogram(data = neg_charge, aes(x = two_norm,y=..count../sum(..count..),color = 'red'),bins = 15) + labs(title = "Normalized Distribution: Positive vs Negatively charged") + theme(plot.title = element_text(hjust = 0.5)) +xlab(TeX("$||$last position - origin positon$||_2$"))
+```
+
+
+
+
+
+Run chi-square to see if two_norm data follows expoenential - Fail
+```{r}
+df_test = layer_data(df_plot,1) 
+p2 = pexp(df_test$xmax,rate = 1/mean(df$two_norm)) - pexp(pmax(df_test$xmin,0),rate = 1/mean(df$two_norm))
+```
+
+```{r}
+chisq.test(df_test$count, p = p2, rescale.p = TRUE)
+```
+
+### first displacement
+```{r}
+df = particles_truth[1,]
+df = df[-1,]
+i = 1
+while (i < nrow(particles_truth)){
+  key = particles_truth$particle_id[i]
+  test = particles_truth[particles_truth$particle_id == key,]
+  df = rbind(df, test[1,])
+  i = i + nrow(test)
+  if(nrow(df) > 500){
+    break
+  }
+}
+```
+
+
+```{r}
+df$q = factor(df$q)
+class(df$q)
+```
+
+
+```{r}
+library(ggplot2)
+df_plot = qplot(df$two_norm,bins =15 )
+df_plot + labs(title = "Distribution of first displacement") + theme(plot.title = element_text(hjust = 0.5)) +xlab(TeX("$||$first hit position - origin positon$||_2$"))
+```
+
+Split positive and negative charge data
+```{r}
+pos_charge = df[df$q == 1,]
+neg_charge = df[df$q ==-1,]
+nrow(pos_charge)
+nrow(neg_charge)
+```
+
+```{r}
+ggplot() + geom_histogram(data = pos_charge, aes(x = two_norm,color = 'blue'),bins = 15) + geom_histogram(data = neg_charge, aes(x = two_norm,color = 'red'),bins = 15)  + labs(title = "Distribution of first displacement: Positive vs Negatively charged") + theme(plot.title = element_text(hjust = 0.5)) +xlab(TeX("$||$first hit position - origin positon$||_2$"))
+```
+
+
+
+Run test 
+```{r}
+mean(neg_charge$two_norm)
+mean(pos_charge$two_norm)
+wilcox.test(neg_charge$two_norm, pos_charge$two_norm)
+```
+Normalized
+```{r}
+ggplot() + geom_histogram(data = pos_charge, aes(x = two_norm,y=..count../sum(..count..),color = 'blue'),bins = 15) + geom_histogram(data = neg_charge, aes(x = two_norm,y=..count../sum(..count..),color = 'red'),bins = 15)  + labs(title = "Normalized Distribution: Positive vs Negatively charged") + theme(plot.title = element_text(hjust = 0.5)) +xlab(TeX("$||$first hit position - origin positon$||_2$"))
+```
+
+
+```{r}
+df_test = layer_data(df_plot,1) 
+p2 = pexp(df_test$xmax,rate = 1/mean(df$two_norm)) - pexp(pmax(df_test$xmin,0),rate = 1/mean(df$two_norm))
+```
+
+```{r}
+chisq.test(df_test$count, p = p2, rescale.p = TRUE)
+```
+>
+ Same results for First displacement
+
+
+
+### Unique values in each event
+```{r}
+number_particles = c()
+for( i in 0:99){
+  event = 1000 + i
+  event_string = toString(event)
+  link = paste0('/Users/Jonnie/Desktop/CERN/train_100_events/event00000',event_string,'-particles.csv')
+  particles2 = read.csv(link)
+  number_particles = c(number_particles,nrow(particles2))
+}
+```
+
+
+
+```{r}
+number_in_event = qplot(number_particles,bins = 10)
+number_in_event  + labs(title = "Number of particles across events") + theme(plot.title = element_text(hjust = 0.5)) +xlab(TeX("Number of particles"))
+```
+### Chi-square
+```{r}
+event_test = layer_data(number_in_event,1) 
+p1 = pnorm(event_test$xmax,mean = mean(number_particles),sd = sd(number_particles)) - pnorm(event_test$xmin,mean = mean(number_particles), sd = sd(number_particles))
+```
+
+```{r}
+chisq.test(event_test$count, p = p1, rescale.p = TRUE)
+```
+
+
+
+## KS-test
+```{r}
+ks.test(number_particles,"pnorm",mean(number_particles),sd(number_particles))
+```
+ ITS NORMAL
+
+
+### Particles with no hits
+Check numbers of particle ids with no data for truth
+```{r}
+length(unique(particles$particle_id))
+length(unique(particles_truth$particle_id))
+length(setdiff(particles$particle_id,truth$particle_id))
+```
+
+```{r}
+no_truth = particles[particles$particle_id %in% setdiff(particles$particle_id,truth$particle_id),]
+nrow(no_truth)
+```
+
+
+
+
+### Test proportion of charge in particles with no hits
+```{r}
+qplot(particles_truth$q,bins = 10)  + labs(title = "Charge of particles for those with hits") + theme(plot.title = element_text(hjust = 0.5)) +xlab("Charge of particle")
+qplot(no_truth$q,bins = 10)+ labs(title = "Charge of particles for those with no hits") + theme(plot.title = element_text(hjust = 0.5)) +xlab("Charge of particle")
+no_truth_prop = nrow(no_truth[no_truth$q == 1,])/length(no_truth$q)
+yes_truth_prop = nrow(particles_truth[particles_truth$q == 1,])/length(particles_truth$q)
+paste0('no_truth_prop: ',no_truth_prop)
+paste0('yes_truth_prop: ',yes_truth_prop)
+
+```
+Z- Test of proportions
+```{r}
+p_e = nrow(particles[particles$q == 1,])/length(particles$q)
+z_observed = (no_truth_prop - yes_truth_prop)/(sqrt((length(particles$q)*p_e*(1-p_e))/(length(no_truth$q)*length(particles_truth$q))))
+paste0('Z score: ',z_observed)
+paste0('p-value: ',1-pnorm(z_observed))
+```
+
+> 
+AHA! Proportions are different! There is more positively charged particles (higher proportion of positively charged particles) in the set where there are no hits!
+
+
+
+Visualizing starting positions of particles with 0 hits
+```{r}
+library(plotly)
+packageVersion('plotly')
+
+plot_ly(no_truth,x =  ~vx,y = ~vy,z = ~vz,color = ~q,colors =c('blue','red') )
+```
+
+
+
+### Momentum of particles with no hits
+```{r}
+no_truth$Mom_norm = sqrt(no_truth$px^2 + no_truth$py^2 + no_truth$pz^2)
+particles_truth$Mom_norm = sqrt(particles_truth$px^2 + particles_truth$py^2 + particles_truth$pz^2)
+```
+
+```{r}
+head(no_truth)
+```
+
+
+```{r}
+qplot(no_truth$Mom_norm,bins = 10) + labs(title = "Distribution of momentum for no hits") + theme(plot.title = element_text(hjust = 0.5)) +xlab(TeX("$||$Momentum$||_2$"))
+qplot(particles_truth$Mom_norm,bins = 10)  + labs(title = "Distribution of momentum for particles with hits") + theme(plot.title = element_text(hjust = 0.5)) +xlab(TeX("$||$Momentum$||_2$"))
+paste0('no_truth: ',mean(no_truth$Mom_norm)) 
+paste0('particles_truth: ',mean(particles_truth$Mom_norm)) 
+```
+> 
+Momentum norm of particles seem to be around 0 regardless of having any hits or not
+
+
+Run test 
+```{r}
+wilcox.test(no_truth$Mom_norm, particles_truth$Mom_norm)
+```
+
+
+
+### Momentum predicting nhits
+
+
+```{r}
+mom_pred_nhits = lm(data = particles, nhits~Mom_norm)
+summary(mom_pred_nhits)
+temp_var <- predict(mom_pred_nhits, interval="prediction")
+new_df <- cbind(particles, temp_var)
+bob = ggplot(data = new_df , aes(x=Mom_norm, y=nhits)) +
+  geom_point() +    
+  geom_line(aes(y=lwr), color = "red", linetype = "dashed")+
+  geom_line(aes(y=upr), color = "red", linetype = "dashed")+
+  geom_smooth(method=lm,se = TRUE)    + labs(title = "Momentum predict nhits") + theme(plot.title = element_text(hjust = 0.5)) +xlab(TeX("$||$Momentum$||_2$"))
+bob
+```
+>
+Momentum horrendous at predicting nhits since it clusters at 0 regardless of nhits
+
+
+
+
+
+Zoom in perhaps?
+
+```{r}
+particles_mNorm_less50= particles[particles$Mom_norm < 50,]
+mom_pred_nhits = lm(data = particles_mNorm_less50, nhits~Mom_norm)
+summary(mom_pred_nhits)
+temp_var <- predict(mom_pred_nhits, interval="prediction")
+new_df <- cbind(particles_mNorm_less50, temp_var)
+bob = ggplot(data = new_df , aes(x=Mom_norm, y=nhits)) +
+  geom_point() +    
+  geom_line(aes(y=lwr), color = "red", linetype = "dashed")+
+  geom_line(aes(y=upr), color = "red", linetype = "dashed")+
+  geom_smooth(method=lm,se = TRUE)    + labs(title = "Momentum predict nhits: Zoom") + theme(plot.title = element_text(hjust = 0.5)) +xlab(TeX("$||$Momentum$||_2$"))
+bob
+```
+
+## Find modes
+```{r}
+test = hist(particles$nhits,breaks = 20)
+mode1 = test$mids[test$counts == max(test$counts)]
+mode2 = test$mids[test$counts == sort(test$counts,partial = length(test$counts) - 1)[length(test$counts)-1]]
+midpoint = (mode1 + mode2)/2
+```
+Ignore plot above
+
+```{r}
+ggplot(data = particles , aes(x=nhits)) + geom_histogram(bins = 10) + geom_vline(aes(xintercept  = midpoint,color = 'midpoint')) + geom_vline(aes(xintercept = mode1,color = 'mode1')) + geom_vline(aes(xintercept = mode2,color = 'mode2')  ) + labs(title = "Distribution of nhits") + theme(plot.title = element_text(hjust = 0.5)) + scale_color_manual(name = "Labels", values = c(midpoint = "blue", mode1 = 'red', mode2 = "green"))
+
+
+
+```
+
+## Chop em 
+```{r}
+expo_side = particles[particles$nhits < midpoint,]$nhits
+norm_side = particles[particles$nhits > midpoint,]$nhits
+expo_plot = qplot(expo_side,bins= 7)
+norm_plot = qplot(norm_side,bins=7)
+expo_plot + labs(title = "Exponential side") + theme(plot.title = element_text(hjust = 0.5))+xlab('nhits')
+norm_plot+ labs(title = "Normal side") + theme(plot.title = element_text(hjust = 0.5))+xlab('nhits')
+```
+
+
+
+
+```{r}
+norm_test = layer_data(norm_plot,1) 
+p1 = pnorm(norm_test$xmax,mean = mean(norm_side),sd = sd(norm_side)) - pnorm(norm_test$xmin,mean = mean(norm_side), sd = sd(norm_side))
+```
+
+```{r}
+chisq.test(norm_test$count, p = p1, rescale.p = TRUE)
+```
+
+
+```{r}
+expo_test = layer_data(expo_plot,1) 
+p2 = pexp(expo_test$xmax,rate = 1/mean(expo_side)) - pexp(pmax(expo_test$xmin,0),rate = 1/mean(expo_side))
+```
+
+```{r}
+chisq.test(expo_test$count, p = p2, rescale.p = TRUE)
+```
+
+## KS  test
+```{r}
+ex = rexp(10000, rate = 1/mean(expo_side))
+ks.test(ex,"pexp",expo_side)
+```
+
+>
+FAILURE AGAIN
+
+
+## Kurtosis Test
+```{r}
+library('moments')
+kurtosis(expo_side)
+ex_set = c()
+for (i in 1:1000){
+  ex = rexp(1000, rate = 1/mean(expo_side))
+  ex_k = kurtosis(ex)
+  ex_set = c(ex_set,ex_k)
+}
+qplot(ex_set,bins = 10) + geom_vline(aes(xintercept = kurtosis(expo_side),color = 'sample_value')) + scale_color_manual(name = "Labels", values = c(sample_value = "blue")) + labs(title = "Kurtosis Distribution of exponential with rate of sample") + theme(plot.title = element_text(hjust = 0.5))+xlab('Kurtosis')
+```
+
+
+```{r}
+kurtosis(norm_side)
+nm_set = c()
+for (i in 1:1000){
+  nm = rnorm(10000, mean = mean(norm_side), sd = sd(norm_side))
+  nm_k = kurtosis(nm)
+  nm_set = c(nm_set,nm_k)
+}
+qplot(nm_set,bins = 10) + geom_vline(aes(xintercept = kurtosis(norm_side),color = 'sample_value'))  + scale_color_manual(name = "Labels", values = c(sample_value = "blue")) + labs(title = "Kurtosis Distribution of Normal with parameters of sample") + theme(plot.title = element_text(hjust = 0.5))+xlab('Kurtosis')
+```
+
+
+### Sum of values by particle_id
+
+```{r}
+particles_value <- merge(particles_truth,cells,by="hit_id")
+particles_value = aggregate(value ~ hit_id + particle_id+q,data = particles_value,FUN = sum)
+particles_value = aggregate(value ~ particle_id+q,data = particles_value,FUN = sum)
+```
+
+
+```{r}
+value_plot = qplot(particles_value$value,bins = 10)
+value_plot + labs(title = "Distribution of sum of particle values by ID") + theme(plot.title = element_text(hjust = 0.5))+xlab('Particle values')
+```
+
+## Chi-square test
+```{r}
+value_test = layer_data(value_plot,1) 
+p2 = pexp(value_test$xmax,rate = 1/mean(particles_value$value)) - pexp(pmax(value_test$xmin,0),rate = 1/mean(particles_value$value))
+```
+
+```{r}
+chisq.test(value_test$count, p = p2, rescale.p = TRUE)
+```
+
+
+## KS  test
+```{r}
+ex = rexp(10000, rate = 1/mean(particles_value$value))
+ks.test(ex,"pexp",particles_value$value)
+```
+
+
+```{r}
+neg_value = particles_value[particles_value$q == -1,]
+pos_value = particles_value[particles_value$q ==1,]
+```
+
+
+```{r}
+qplot(neg_value$value,bins = 15)+ labs(title = "Distribution for negative charge") + theme(plot.title = element_text(hjust = 0.5))+xlab('Particle value')
+qplot(pos_value$value,bins = 15)+ labs(title = "Distribution for positive charge") + theme(plot.title = element_text(hjust = 0.5))+xlab('Particle value')
+```
+
+
+Test if means are diff
+```{r}
+mean(neg_value$value)
+mean(pos_value$value)
+wilcox.test(neg_value$value, pos_value$value)
+```
+
+```{r}
+ggplot() + geom_histogram(data = pos_value, aes(x = value,color = 'blue'),bins = 15) + geom_histogram(data = neg_value, aes(x = value,color = 'red'),bins = 15)+ labs(title = "Positive and negative side by side") + theme(plot.title = element_text(hjust = 0.5))+xlab('Particle value')
+```
+
+
+### sum of all values in all events
+```{r}
+number_values = c()
+for( i in 0:99){
+  event = 1000 + i
+  event_string = toString(event)
+  link = paste0('/Users/Jonnie/Desktop/CERN/train_100_events/event00000',event_string,'-cells.csv')
+  cells2 = read.csv(link)
+  number_values = c(number_values,sum(cells2$value))
+}
+```
+
+```{r}
+values_plot = qplot(number_values,bins = 15)
+values_plot+ labs(title = "Distribution of sum of all values per event") + theme(plot.title = element_text(hjust = 0.5))+xlab('Values per event')
+```
+
+
+### Chi-square
+```{r}
+values_test = layer_data(values_plot,1) 
+p1 = pnorm(values_test$xmax,mean = mean(number_values),sd = sd(number_values)) - pnorm(values_test$xmin,mean = mean(number_values), sd = sd(number_values))
+```
+
+```{r}
+chisq.test(values_test$count, p = p1, rescale.p = TRUE)
+```
+
+
+
+## KS-test
+```{r}
+ks.test(number_values,"pnorm",mean(number_values),sd(number_values))
+```
+
+
+
+```{r}
+ggplot(data = data.frame(values = number_values),aes(sample = values)) + stat_qq() + stat_qq_line(color = "red") + labs(title = "QQ- Norm") + theme(plot.title = element_text(hjust = 0.5)) 
+```
+
